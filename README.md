@@ -1,61 +1,161 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Laravel Cron & Queue Demo
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A simple demonstration of Laravel's task scheduling (cron jobs) and queue system for cleaning up log files.
 
-## About Laravel
+## Overview
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+This demo shows how to:
+1. Create a Laravel **Job** to clean up log files
+2. Create an **Artisan Command** to dispatch the job to a queue
+3. **Schedule** the command to run automatically using Laravel's task scheduler
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Project Structure
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+```
+app/
+├── Console/
+│   └── Commands/
+│       └── CleanupLogsCommand.php    # Command to dispatch the job
+├── Jobs/
+│   └── CleanupLogs.php               # Job that cleans the log file
+routes/
+└── console.php                        # Scheduled tasks defined here
+```
 
-## Learning Laravel
+## Setup Instructions
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### 1. Clone & Install Dependencies
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+```bash
+git clone <repository-url>
+cd cron-demo
+composer install
+cp .env.example .env
+php artisan key:generate
+```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### 2. Configure Queue Driver
 
-## Laravel Sponsors
+For simplicity, this demo uses the **sync** driver (executes jobs immediately).
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+In your `.env` file, ensure it's set to:
+```env
+QUEUE_CONNECTION=sync
+```
 
-### Premium Partners
+### 3. Test the Job Manually
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+You can manually dispatch the job to see it in action:
 
-## Contributing
+```bash
+php artisan logs:cleanup
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+This will:
+- Dispatch the `CleanupLogs` job to the queue
+- The job will clear the contents of `storage/logs/laravel.log`
 
-## Code of Conduct
+### 4. Schedule the Task (Cron Job)
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+The command is already scheduled in `routes/console.php` to run **daily at midnight**.
 
-## Security Vulnerabilities
+To test the scheduler locally:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+php artisan schedule:work
+```
+
+Or run it once:
+
+```bash
+php artisan schedule:run
+```
+
+### 5. Production Setup
+
+In production, add this cron entry to your server:
+
+```bash
+* * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+This will check every minute if any scheduled tasks need to run.
+
+## How It Works
+
+### 1. **CleanupLogs Job** (`app/Jobs/CleanupLogs.php`)
+- Implements `ShouldQueue` interface to make it queueable
+- Clears the content of `storage/logs/laravel.log`
+- Logs a message after cleanup
+
+### 2. **CleanupLogsCommand** (`app/Console/Commands/CleanupLogsCommand.php`)
+- Command signature: `logs:cleanup`
+- Dispatches the `CleanupLogs` job to the queue
+- Can be run manually or scheduled
+
+### 3. **Task Scheduler** (`routes/console.php`)
+- Schedules `logs:cleanup` command to run daily
+- Uses Laravel's task scheduling API
+
+## Queue Configuration
+
+### Sync Driver (Default - Simplest)
+- Jobs execute immediately, synchronously
+- No queue worker needed
+- Perfect for simple demos and testing
+
+### Database Driver (Recommended for Production)
+- Jobs are stored in the database
+- Requires running `php artisan queue:work`
+- Better for handling failures and retries
+
+## Available Commands
+
+```bash
+# Manually run the cleanup command
+php artisan logs:cleanup
+
+# Test the scheduler (runs all due tasks)
+php artisan schedule:run
+
+# Run scheduler continuously (for local testing)
+php artisan schedule:work
+
+# List all scheduled tasks
+php artisan schedule:list
+
+# Run queue worker (if using database driver)
+php artisan queue:work
+```
+
+## Testing
+
+Generate some logs to test the cleanup:
+
+```bash
+# Create some log entries
+php artisan tinker
+>>> Log::info('Test log entry 1');
+>>> Log::warning('Test log entry 2');
+>>> Log::error('Test log entry 3');
+>>> exit
+
+# Check the log file
+cat storage/logs/laravel.log
+
+# Run cleanup
+php artisan logs:cleanup
+
+# Verify it's cleaned
+cat storage/logs/laravel.log
+```
+
+## Requirements
+
+- PHP >= 8.3
+- Laravel >= 12.x
+- Composer >= 2.6
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+This is a demo project for educational purposes.
